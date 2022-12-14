@@ -18,6 +18,6 @@ export class UsersService {
   }
 
   findOne(id: string) {
-    return this.userModel.findById(id).exec();
+    return this.userModel.findById(id);
   }
 }

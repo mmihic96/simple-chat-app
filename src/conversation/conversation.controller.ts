@@ -7,14 +7,24 @@ import {
   Headers,
   NotFoundException,
   Query,
+  Inject,
 } from '@nestjs/common';
-import mongoose, { mongo } from 'mongoose';
-import { QueryDto } from 'src/users/dto/users.dto';
+import mongoose from 'mongoose';
+import { QueryDto } from '../users/dto/users.dto';
+import { UsersService } from '../users/users.service';
 import { ConversationService } from './conversation.service';
+import { SocketService } from './socket.service';
 
 @Controller({ path: 'conversations', version: '1' })
 export class ConversationController {
-  constructor(private readonly conversationService: ConversationService) {}
+  @Inject(ConversationService)
+  private readonly conversationService: ConversationService;
+
+  @Inject(UsersService)
+  private readonly usersService: UsersService;
+
+  @Inject(SocketService)
+  private readonly socketService: SocketService;
 
   @Post(':conversationId')
   async sendMessage(
@@ -26,14 +36,6 @@ export class ConversationController {
     },
     @Body() { message }: { message: string },
   ) {
-    // Check if conversation exists, if throw not found error
-    const conversation = await this.conversationService.findOne({
-      id: conversationId,
-    });
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
-
     if (!headers['x-user-id']) {
       throw new NotFoundException('Participant not found');
     }
@@ -43,19 +45,52 @@ export class ConversationController {
     }
 
     // If conversation exists, add message to conversation
-    conversation.messages.push({
-      message: message,
-      sender: new mongoose.Types.ObjectId(headers['x-user-id']),
-      isSeen: false,
-      timestamp: new Date().valueOf(),
-    });
-    // Update conversation
-    await conversation.markModified('messages');
-    await conversation.save();
-    // TODO: Send message to all users in conversation, except the sender
+    const timestamp = new Date().valueOf();
+    const sender = await this.usersService.findOne(headers['x-user-id']);
+
+    // Push message to conversation
+    await this.conversationService.update(
+      {
+        _id: new mongoose.Types.ObjectId(conversationId),
+      },
+      {
+        $push: {
+          messages: {
+            message,
+            timestamp,
+            sender: headers['x-user-id'],
+            isSeen: false,
+          },
+        },
+      },
+    );
+
+    // Send message to all users in conversation, except the sender
+    this.socketService.emit(
+      'message',
+      { message, timestamp, sender },
+      conversationId,
+      headers['x-socket-id'],
+    );
 
     // Return conversation
-    return conversation;
+    return { message, timestamp, sender };
+  }
+
+  @Post('/typing')
+  async typing(
+    @Headers() headers: { 'x-socket-id': string },
+    @Body() { conversationId }: { conversationId: string },
+  ) {
+    const sender = await this.usersService.findOne(headers['x-user-id']);
+
+    // Send typing event to all users in conversation, except the sender
+    this.socketService.emit(
+      'typing',
+      { sender },
+      conversationId,
+      headers['x-socket-id'],
+    );
   }
 
   @Get()
@@ -77,7 +112,13 @@ export class ConversationController {
     });
 
     // Todo: Join socket room for each conversation (using conversation id)
-
+    for (const conversation of conversations) {
+      this.socketService.joinRoom(
+        headers['x-socket-id'],
+        // @ts-ignore
+        conversation._id.toString(),
+      );
+    }
     // Return conversations
     return conversations;
   }
