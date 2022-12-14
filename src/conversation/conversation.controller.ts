@@ -77,10 +77,10 @@ export class ConversationController {
     return { message, timestamp, sender };
   }
 
-  @Post('/typing')
+  @Post('/:conversationId/typing')
   async typing(
     @Headers() headers: { 'x-socket-id': string },
-    @Body() { conversationId }: { conversationId: string },
+    @Param('conversationId') conversationId: string,
   ) {
     const sender = await this.usersService.findOne(headers['x-user-id']);
 
@@ -91,6 +91,7 @@ export class ConversationController {
       conversationId,
       headers['x-socket-id'],
     );
+    return { sender, conversationId, socketId: headers['x-socket-id'] };
   }
 
   @Get()
