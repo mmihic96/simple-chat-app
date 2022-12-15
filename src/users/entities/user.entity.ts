@@ -3,9 +3,9 @@ import { HydratedDocument } from 'mongoose';
 
 export type UserDocument = HydratedDocument<User>;
 
-enum OnlineStatus {
-  ONLINE = 'ONLINE',
-  OFFLINE = 'OFFLINE',
+export enum OnlineStatus {
+  ONLINE = 'online',
+  OFFLINE = 'offline',
 }
 
 @Schema({})

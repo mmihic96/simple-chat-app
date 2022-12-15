@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { QueryDto } from './dto/users.dto';
 import { User, UserDocument } from './entities/user.entity';
 
@@ -19,5 +19,13 @@ export class UsersService {
 
   findOne(id: string) {
     return this.userModel.findById(id);
+  }
+
+  update(id: string, data: Partial<User>) {
+    return this.userModel.findByIdAndUpdate(
+      new mongoose.Types.ObjectId(id),
+      { ...data },
+      { new: true },
+    );
   }
 }
